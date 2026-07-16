@@ -274,6 +274,7 @@
         <div class="arb-text">
           <span class="arb-count" id="selectedCount">15</span> rows automatically selected from current view
           <div class="visit-chips" id="visitChips"></div>
+          <div id="batchSplitNotice" style="display:none;margin-top:6px;padding:6px 9px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#856404;font-size:11px;"></div>
         </div>
       </div>
 
@@ -343,9 +344,13 @@
           <label>From address <span class="new-badge">NEW</span></label>
           <input type="email" id="ts_from_email" value="coordinator@gqs.com" placeholder="coordinator@gqs.com"/>
         </div>
-        <div class="form-row" style="margin-bottom:0;">
+        <div class="form-row">
           <label>To address <span class="new-badge">NEW</span></label>
           <input type="email" id="ts_to_email" placeholder="client@onesubsea.com" oninput="checkSendReady()"/>
+        </div>
+        <div class="form-row" style="margin-bottom:0;">
+          <label>CC address <span class="new-badge">NEW</span> <span style="font-weight:400;color:#888;">(optional)</span></label>
+          <input type="email" id="ts_cc_email" placeholder="manager@gqs.com"/>
         </div>
       </div>
 
@@ -465,6 +470,14 @@ const ROWS = [
   {noi:"152437 (01)",inspector:"Hamon (Xianqiang) He",dateFrom:"05/06/2026",dateEnd:"05/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0006",po:"PO-45000006",cc:"CC-0006",qs:"QSP-2026-006",status:"Approved & Invoiced",hi:false,notes:""},
   {noi:"152430 (01)",inspector:"Barry Li",dateFrom:"03/06/2026",dateEnd:"04/06/2026",hours:21,workTime:16,travelTime:3,reportTime:2,otherTime:0,mileage:200,visit:"GQS550-057/0004/0005",po:"PO-45000005",cc:"CC-0005",qs:"QSP-2026-005",status:"Approved & Invoiced",hi:false,notes:"Extended visit - 2 days"},
   {noi:"152420 (01)",inspector:"Liu Simon",dateFrom:"02/06/2026",dateEnd:"02/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0004",po:"PO-45000004",cc:"CC-0004",qs:"QSP-2026-004",status:"Approved (Timesheet)",hi:true,notes:"Initial visit"},
+  {noi:"152780 (01)",inspector:"Shang Jianqi",dateFrom:"01/06/2026",dateEnd:"01/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0017",po:"PO-45000017",cc:"CC-0017",qs:"QSP-2026-017",status:"Approved & Invoiced",hi:false,notes:""},
+  {noi:"152790 (01)",inspector:"Zhixiang Jiang",dateFrom:"28/06/2026",dateEnd:"28/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0018",po:"PO-45000018",cc:"CC-0018",qs:"QSP-2026-018",status:"Approved & Invoiced",hi:true,notes:""},
+  {noi:"152800 (01)",inspector:"Handong Li",dateFrom:"27/06/2026",dateEnd:"27/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0019",po:"PO-45000019",cc:"CC-0019",qs:"QSP-2026-019",status:"Approved & Invoiced",hi:false,notes:""},
+  {noi:"152810 (01)",inspector:"Barry Li",dateFrom:"29/06/2026",dateEnd:"29/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0020",po:"PO-45000020",cc:"CC-0020",qs:"QSP-2026-020",status:"Approved & Invoiced",hi:true,notes:""},
+  {noi:"152820 (01)",inspector:"Liu Simon",dateFrom:"20/06/2026",dateEnd:"20/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0021",po:"PO-45000021",cc:"CC-0021",qs:"QSP-2026-021",status:"Approved & Invoiced",hi:false,notes:""},
+  {noi:"152830 (01)",inspector:"Yin, Leo",dateFrom:"19/06/2026",dateEnd:"19/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0022",po:"PO-45000022",cc:"CC-0022",qs:"QSP-2026-022",status:"Approved & Invoiced",hi:true,notes:""},
+  {noi:"152840 (01)",inspector:"Hamon (Xianqiang) He",dateFrom:"18/06/2026",dateEnd:"18/06/2026",hours:11,workTime:8,travelTime:2,reportTime:1,otherTime:0,mileage:100,visit:"GQS550-057/0004/0023",po:"PO-45000023",cc:"CC-0023",qs:"QSP-2026-023",status:"Approved & Invoiced",hi:false,notes:""},
+  {noi:"152850 (01)",inspector:"Zhang Jianguo",dateFrom:"15/06/2026",dateEnd:"16/06/2026",hours:21,workTime:16,travelTime:3,reportTime:2,otherTime:0,mileage:200,visit:"GQS550-057/0004/0024",po:"PO-45000024",cc:"CC-0024",qs:"QSP-2026-024",status:"Approved & Invoiced",hi:true,notes:"Extended visit - 2 days"},
 ];
 
 const CLIENT="One Subsea Malaysia Systems Sdn Bhd.";
@@ -571,12 +584,28 @@ function renderVisitChips(){
     m.textContent='+'+(rows.length-3)+' more';
     chips.appendChild(m);
   }
+  const notice=document.getElementById('batchSplitNotice');
+  const BATCH_SIZE=15;
+  if(rows.length>BATCH_SIZE){
+    const batches=chunkRows(rows,BATCH_SIZE);
+    const sizes=batches.map(b=>b.length).join(' + ');
+    notice.style.display='block';
+    notice.innerHTML='&#9888; '+rows.length+' visits exceeds the 15-visit client limit &mdash; will auto-split into <strong>'+batches.length+' separate timesheets</strong> ('+sizes+' visits) as TS01, TS02'+(batches.length>2?', ...':'')+'.';
+  } else {
+    notice.style.display='none';
+  }
 }
 
-function buildFilename(){
+function buildFilename(suffix){
+  suffix=suffix||'TS01';
   const vn=(document.getElementById('ts_visitnum').value||'').trim().replace(/\//g,'_');
   const wb=(document.getElementById('ts_wbs').value||'').trim();
-  return vn+'_'+wb+'-TS01';
+  return vn+'_'+wb+'-'+suffix;
+}
+function chunkRows(rows,size){
+  const out=[];
+  for(let i=0;i<rows.length;i+=size) out.push(rows.slice(i,i+size));
+  return out;
 }
 function updateFilename(){
   const fn=buildFilename()+'.pdf';
@@ -597,6 +626,7 @@ function checkSendReady(){
 }
 function doSendLink(){
   const toEmail=(document.getElementById('ts_to_email')||{}).value||'';
+  const ccEmail=(document.getElementById('ts_cc_email')||{}).value||'';
   if(!toEmail.includes('@')){
     switchTab('tab-send',document.querySelectorAll('.modal-tab')[1]);
     document.getElementById('ts_to_email').focus();
@@ -604,7 +634,15 @@ function doSendLink(){
     return;
   }
   closeModal();
-  showToast('Link sent to '+toEmail+' successfully!');
+  const ccMsg=ccEmail?(' (cc: '+ccEmail+')'):'';
+  const rows=selectedRows.size>0?[...selectedRows].map(i=>filteredData[i]):[...filteredData];
+  const BATCH_SIZE=15;
+  if(rows.length>BATCH_SIZE){
+    const batches=chunkRows(rows,BATCH_SIZE);
+    showToast(batches.length+' separate timesheet links (TS01-TS'+String(batches.length).padStart(2,'0')+') sent to '+toEmail+ccMsg+'!');
+  } else {
+    showToast('Link sent to '+toEmail+ccMsg+' successfully!');
+  }
 }
 function closeModal(){document.getElementById('timesheetModal').classList.remove('open');}
 function exportList(){showToast('Export started - file will download shortly');}
@@ -623,11 +661,30 @@ function generatePDF(){
   const tsBy=document.getElementById('ts_by').value;
   const tsCtr=document.getElementById('ts_ctr').value;
 
-  let rows=[];
-  if(selectedRows.size>0)[...selectedRows].sort((a,b)=>a-b).forEach(i=>rows.push(filteredData[i]));
-  else rows=[...filteredData];
-  if(!rows.length){showToast('No records to generate!');return;}
+  let allRows=[];
+  if(selectedRows.size>0)[...selectedRows].sort((a,b)=>a-b).forEach(i=>allRows.push(filteredData[i]));
+  else allRows=[...filteredData];
+  if(!allRows.length){showToast('No records to generate!');return;}
 
+  const BATCH_SIZE=15;
+  const batches=chunkRows(allRows,BATCH_SIZE);
+
+  batches.forEach((rows,batchIdx)=>{
+    setTimeout(()=>{
+      const suffix='TS'+String(batchIdx+1).padStart(2,'0');
+      const batchLabel=batches.length>1?(' (Batch '+(batchIdx+1)+' of '+batches.length+')'):'';
+      openOnePdf(rows,{tsFrom,tsTo,tsClient,tsWBS,tsMonth,tsCC,tsGC,tsBy,tsCtr},suffix,batchLabel);
+    }, batchIdx*350);
+  });
+
+  if(batches.length>1){
+    showToast(allRows.length+' visits split into '+batches.length+' timesheets (max 15 each) \u2014 opening '+batches.length+' tabs...');
+  } else {
+    showToast('Timesheet PDF preview opened!');
+  }
+}
+
+function openOnePdf(rows,f,suffix,batchLabel){
   const tV=rows.length;
   const tH=rows.reduce((s,r)=>s+r.hours,0);
   const tM=rows.reduce((s,r)=>s+r.mileage,0);
@@ -665,7 +722,7 @@ function generatePDF(){
   const genDate=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
   const genTime=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 
-  const fileName=buildFilename();
+  const fileName=buildFilename(suffix);
   const html=`<!DOCTYPE html><html><head><title>${fileName}</title>
   <style>
     @page{size:A3 landscape;margin:12mm 10mm;}
@@ -691,7 +748,7 @@ function generatePDF(){
           <div style="font-size:10px;color:#555;">Global Quality Services</div>
         </td>
         <td style="text-align:right;vertical-align:top;">
-          <div style="font-size:14px;font-weight:bold;color:#1a6b3c;">WBS-wise 10-Day Consolidated Timesheet - Sample Data</div>
+          <div style="font-size:14px;font-weight:bold;color:#1a6b3c;">WBS-wise 10-Day Consolidated Timesheet - Sample Data${batchLabel}</div>
           <div style="font-size:10px;color:#777;margin-top:3px;">Generated: ${genDate} ${genTime}</div>
         </td>
       </tr>
@@ -699,8 +756,8 @@ function generatePDF(){
 
     <!-- Summary box -->
     <div style="border:1.5px solid #1a6b3c;border-radius:4px;padding:9px 14px;margin-bottom:12px;background:#f0faf4;">
-      <div style="font-weight:bold;color:#1a6b3c;margin-bottom:5px;">&#9679; Actual data from report selection</div>
-      <div>&#9679; Total visits: <strong>${tV}</strong></div>
+      <div style="font-weight:bold;color:#1a6b3c;margin-bottom:5px;">&#9679; Actual data from report selection${batchLabel}</div>
+      <div>&#9679; Total visits in this document: <strong>${tV}</strong></div>
       <div style="margin-top:3px;">&#9679; Visit period: <strong>${minDate} to ${maxDate}</strong></div>
       <div style="margin-top:3px;">&#9679; Supplier: <strong>${VENDOR}</strong></div>
     </div>
@@ -710,34 +767,34 @@ function generatePDF(){
       <thead>
         <tr style="background:#1a6b3c;">
           <td colspan="6" style="color:#fff;font-weight:bold;font-size:13px;padding:7px 12px;text-align:center;">
-            WBS-wise 10-Day Consolidated Timesheet - ${tsMonth}
+            WBS-wise 10-Day Consolidated Timesheet - ${f.tsMonth}${batchLabel}
           </td>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;width:13%;">Client:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;width:22%;">${tsClient}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;width:22%;">${f.tsClient}</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;width:10%;">Month:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;width:18%;">${tsMonth}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;width:18%;">${f.tsMonth}</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;width:14%;">Client Contact:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tsCC}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${f.tsCC}</td>
         </tr>
         <tr>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">Submission Period:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tsFrom} to ${tsTo}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${f.tsFrom} to ${f.tsTo}</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">WBS Number:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tsWBS}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${f.tsWBS}</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">Global Contact:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tsGC}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${f.tsGC}</td>
         </tr>
         <tr>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">Submitted By:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tsBy}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${f.tsBy}</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">Total Visits:</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tV}</td>
           <td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">CTR Number:</td>
-          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${tsCtr}</td>
+          <td style="border:1px solid #b0ccb8;padding:6px 9px;">${f.tsCtr}</td>
         </tr>
       </tbody>
     </table>
@@ -746,7 +803,7 @@ function generatePDF(){
     <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px;">
       <thead>
         <tr style="background:#1a6b3c;">
-          <td colspan="17" style="color:#fff;font-weight:bold;font-size:12px;padding:6px 10px;text-align:center;">Visit Details</td>
+          <td colspan="17" style="color:#fff;font-weight:bold;font-size:12px;padding:6px 10px;text-align:center;">Visit Details${batchLabel}</td>
         </tr>
         <tr style="background:#2d8a5a;color:#fff;font-weight:bold;">
           <th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Sl. No.</th>
@@ -801,7 +858,7 @@ function generatePDF(){
             </div>
             <div style="margin-bottom:12px;">
               <div style="font-size:10px;font-weight:bold;color:#555;">Coordinator</div>
-              <div style="font-size:12px;color:#222;">${tsBy} / ${tsCC}</div>
+              <div style="font-size:12px;color:#222;">${f.tsBy} / ${f.tsCC}</div>
             </div>
             <div style="margin-bottom:12px;">
               <div style="font-size:10px;font-weight:bold;color:#555;">Date Generated</div>
@@ -853,7 +910,6 @@ function generatePDF(){
   const pdfBlob=new Blob([html],{type:'text/html'});
   const pdfUrl=URL.createObjectURL(pdfBlob);
   window.open(pdfUrl,'_blank');
-  showToast('Timesheet PDF preview opened!');
 }
 
 renderTable();
