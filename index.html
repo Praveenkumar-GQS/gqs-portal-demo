@@ -74,7 +74,7 @@
   .table-footer a{color:#00e5a0;cursor:pointer;}
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;align-items:center;justify-content:center;}
   .modal-overlay.open{display:flex;}
-  .modal{background:#fff;border-radius:10px;width:580px;max-width:96vw;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden;}
+  .modal{background:#fff;border-radius:10px;width:580px;max-width:96vw;max-height:88vh;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden;display:flex;flex-direction:column;}
   .modal-header{background:#1a3a5c;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;}
   .modal-header-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;letter-spacing:.01em;}
   .modal-header-badge{background:#2e6da4;color:#c8e6ff;font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;}
@@ -83,7 +83,7 @@
   .modal-tabs{display:flex;border-bottom:2px solid #e8edf2;background:#f7f9fb;}
   .modal-tab{flex:1;padding:9px 0;text-align:center;font-size:11px;font-weight:600;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color 0.15s,border-color 0.15s;}
   .modal-tab.active{color:#1a3a5c;border-bottom-color:#1a3a5c;}
-  .modal-tab-content{display:none;padding:16px 18px 8px;}
+  .modal-tab-content{display:none;padding:16px 18px 8px;overflow-y:auto;flex:1;min-height:0;}
   .modal-tab-content.active{display:block;}
   .form-section-label{font-size:10px;font-weight:700;color:#888;letter-spacing:.07em;text-transform:uppercase;margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid #eee;}
   .form-row{margin-bottom:11px;}
@@ -354,8 +354,11 @@
         </div>
       </div>
 
-      <div class="form-section-label" style="margin-top:14px;">Email preview</div>
-      <div id="emailPreviewContainer" style="border:1px solid #d0dcea;border-radius:8px;overflow:hidden;margin-bottom:8px;"></div>
+      <div class="form-section-label" style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleEmailPreview()">
+        <span>Email preview</span>
+        <span id="emailPreviewToggle" style="color:#1a3a5c;font-weight:700;font-size:11px;text-transform:none;letter-spacing:normal;">Show &#9660;</span>
+      </div>
+      <div id="emailPreviewContainer" style="border:1px solid #d0dcea;border-radius:8px;overflow:hidden;margin-bottom:8px;display:none;"></div>
 
       <div class="form-section-label" style="margin-top:12px;">Link preview</div>
       <div id="linkListContainer"></div>
@@ -1198,6 +1201,14 @@ function doUpload(){
 
 document.getElementById('uploadModal').addEventListener('click',function(e){if(e.target===this)closeUploadModal();});
 document.getElementById('signedTsModal').addEventListener('click',function(e){if(e.target===this)closeSignedTsModal();});
+
+function toggleEmailPreview(){
+  const container=document.getElementById('emailPreviewContainer');
+  const toggle=document.getElementById('emailPreviewToggle');
+  const isHidden=container.style.display==='none';
+  container.style.display=isHidden?'block':'none';
+  toggle.innerHTML=isHidden?'Hide &#9650;':'Show &#9660;';
+}
 
 function renderEmailPreview(){
   const container=document.getElementById('emailPreviewContainer');
