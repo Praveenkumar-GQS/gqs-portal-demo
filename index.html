@@ -342,17 +342,20 @@
       <div class="email-section">
         <div class="form-row">
           <label>From address <span class="new-badge">NEW</span></label>
-          <input type="email" id="ts_from_email" value="coordinator@gqs.com" placeholder="coordinator@gqs.com"/>
+          <input type="email" id="ts_from_email" value="coordinator@gqs.com" placeholder="coordinator@gqs.com" oninput="renderEmailPreview()"/>
         </div>
         <div class="form-row">
           <label>To address <span class="new-badge">NEW</span></label>
-          <input type="email" id="ts_to_email" placeholder="client@onesubsea.com" oninput="checkSendReady()"/>
+          <input type="email" id="ts_to_email" placeholder="client@onesubsea.com" oninput="checkSendReady();renderEmailPreview();"/>
         </div>
         <div class="form-row" style="margin-bottom:0;">
           <label>CC address <span class="new-badge">NEW</span> <span style="font-weight:400;color:#888;">(optional)</span></label>
-          <input type="email" id="ts_cc_email" placeholder="manager@gqs.com"/>
+          <input type="email" id="ts_cc_email" placeholder="manager@gqs.com" oninput="renderEmailPreview()"/>
         </div>
       </div>
+
+      <div class="form-section-label" style="margin-top:14px;">Email preview</div>
+      <div id="emailPreviewContainer" style="border:1px solid #d0dcea;border-radius:8px;overflow:hidden;margin-bottom:8px;"></div>
 
       <div class="form-section-label" style="margin-top:12px;">Link preview</div>
       <div id="linkListContainer"></div>
@@ -436,6 +439,30 @@
   </div>
 </div>
 
+<!-- SIGNED TIMESHEET REVIEW MODAL -->
+<div class="modal-overlay" id="signedTsModal">
+  <div class="modal" style="width:900px;max-width:96vw;">
+    <div class="modal-header" style="background:#1b5e20;">
+      &#128196; Signed Timesheet Review
+      <button class="modal-close" onclick="closeSignedTsModal()">&#10005;</button>
+    </div>
+    <div class="modal-body" style="padding:14px 16px 8px;">
+
+      <div style="background:#f4faf5;border:1px solid #a5d6a7;border-radius:5px;padding:9px 12px;margin-bottom:10px;font-size:11px;color:#1b5e20;display:flex;justify-content:space-between;align-items:center;">
+        <span>&#9989; This document was submitted and saved automatically from the client portal &mdash; no manual review occurred yet.</span>
+        <strong id="signedTsDocLabel" style="white-space:nowrap;margin-left:12px;"></strong>
+      </div>
+
+      <iframe id="signedTsFrame" style="width:100%;height:560px;border:1px solid #d0dcea;border-radius:6px;background:#fff;"></iframe>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="resendLinkFlow()" style="border-color:#c0392b;color:#c0392b;">&#128257; Resend Link</button>
+      <button class="btn-confirm" onclick="approveSignedDoc()">&#9989; Approve</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -490,7 +517,7 @@ function renderTable(){
       <td>${CLIENT}</td><td>${r.noi}</td><td>${VENDOR}</td>
       <td>${r.hours}.00</td><td>0.00</td><td>${r.mileage}.00</td>
       <td>${r.visit}</td><td>${WBS}</td>
-      <td style="font-size:10px;color:#1565c0;">${DOC_NAME}</td>
+      <td style="font-size:10px;"><span class="report-link" onclick="openSignedTimesheetModal('${r.inspector}','${r.visit}')" style="cursor:pointer;">${DOC_NAME}</span></td>
       <td><span class="report-link">Report</span></td>`;
     tbody.appendChild(tr);
   });
@@ -530,7 +557,10 @@ function onCoordSigUpload(input){
   reader.readAsDataURL(file);
 }
 
-function openTimesheetModal(){
+let currentRevision=0;
+
+function openTimesheetModal(keepRevision){
+  if(!keepRevision) currentRevision=0;
   updateCount();
   const fv=document.getElementById('visitNum').value;
   document.getElementById('ts_visitnum').value=fv;
@@ -547,7 +577,7 @@ function switchTab(tabId, el){
   document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   el.classList.add('active');
-  if(tabId==='tab-send') renderLinkList();
+  if(tabId==='tab-send'){ renderLinkList(); renderEmailPreview(); }
 }
 
 function renderVisitChips(){
@@ -583,7 +613,8 @@ function buildFilename(suffix){
   suffix=suffix||'TS01';
   const vn=(document.getElementById('ts_visitnum').value||'').trim().replace(/\//g,'_');
   const wb=(document.getElementById('ts_wbs').value||'').trim();
-  return vn+'_'+wb+'-'+suffix;
+  const rev=currentRevision>0?('-REV'+currentRevision):'';
+  return vn+'_'+wb+'-'+suffix+rev;
 }
 function chunkRows(rows,size){
   const out=[];
@@ -916,6 +947,170 @@ function closeUploadModal(){
   document.getElementById('uploadModal').classList.remove('open');
 }
 
+let signedTsCurrentVisit=null;
+function buildSignedTimesheetHtml(rows,docName,batchLabel){
+  const tV=rows.length;
+  const tH=rows.reduce((s,r)=>s+r.hours,0);
+  const tM=rows.reduce((s,r)=>s+r.mileage,0);
+  const tW=rows.reduce((s,r)=>s+r.workTime,0);
+  const tT=rows.reduce((s,r)=>s+r.travelTime,0);
+  const tR=rows.reduce((s,r)=>s+r.reportTime,0);
+  const tO=rows.reduce((s,r)=>s+r.otherTime,0);
+  const minDate=rows[rows.length-1].dateFrom;
+  const maxDate=rows[0].dateEnd;
+  const genDate=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+
+  let rowsHTML='';
+  rows.forEach(function(r,i){
+    const tot=r.workTime+r.travelTime+r.reportTime+r.otherTime;
+    rowsHTML+='<tr style="background:'+(i%2===0?'#fff':'#f4faf6')+'">'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;">'+(i+1)+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;">'+r.noi+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;">'+r.dateFrom+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;">'+r.dateEnd+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;">'+r.inspector+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;">'+r.visit+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;">'+r.workTime+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;">'+r.travelTime+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;">'+r.reportTime+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;">'+r.otherTime+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;font-weight:bold;">'+tot+'</td>'+
+      '<td style="border:1px solid #c0d8c8;padding:4px 6px;text-align:center;">'+r.mileage+'</td>'+
+    '</tr>';
+  });
+
+  let html='<!DOCTYPE html><html><head><style>'+
+    'body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0;padding:16px;}'+
+    '</style></head><body>'+
+
+    '<table style="width:100%;margin-bottom:10px;border-collapse:collapse;">'+
+      '<tr>'+
+        '<td style="width:50%;vertical-align:top;">'+
+          '<div style="font-size:20px;font-weight:900;color:#1a6b3c;letter-spacing:-1px;">GQS &#10003;</div>'+
+          '<div style="font-size:10px;color:#555;">Global Quality Services</div>'+
+        '</td>'+
+        '<td style="text-align:right;vertical-align:top;">'+
+          '<div style="font-size:14px;font-weight:bold;color:#1a6b3c;">WBS-wise 10-Day Consolidated Timesheet'+batchLabel+'</div>'+
+          '<div style="font-size:10px;color:#777;margin-top:3px;">Signed and submitted: '+genDate+'</div>'+
+        '</td>'+
+      '</tr>'+
+    '</table>'+
+
+    '<div style="border:1.5px solid #1a6b3c;border-radius:4px;padding:9px 14px;margin-bottom:12px;background:#f0faf4;">'+
+      '<div style="font-weight:bold;color:#1a6b3c;margin-bottom:5px;">&#9679; Signed document on file</div>'+
+      '<div>&#9679; Total visits: <strong>'+tV+'</strong></div>'+
+      '<div style="margin-top:3px;">&#9679; Visit period: <strong>'+minDate+' to '+maxDate+'</strong></div>'+
+      '<div style="margin-top:3px;">&#9679; Document: <strong>'+docName+'.pdf</strong></div>'+
+    '</div>'+
+
+    '<table style="width:100%;border-collapse:collapse;border:1.5px solid #1a6b3c;margin-bottom:12px;">'+
+      '<tbody>'+
+        '<tr>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;width:15%;">Client:</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;width:35%;">One Subsea Malaysia Systems Sdn Bhd.</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;width:15%;">WBS Number:</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;width:35%;">100394-10MY</td>'+
+        '</tr>'+
+        '<tr>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">CTR Number:</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;">CTR-100394-01</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;font-weight:bold;background:#e6f5ec;">Total Visits:</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:6px 9px;">'+tV+'</td>'+
+        '</tr>'+
+      '</tbody>'+
+    '</table>'+
+
+    '<table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px;">'+
+      '<thead>'+
+        '<tr style="background:#2d8a5a;color:#fff;font-weight:bold;">'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Sl. No.</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;">NOI Number</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;">Visit Start</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;">Visit End</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;">Inspector</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;">GQS / Visit Number</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Work Time</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Travel Time</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Report Time</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">OT Time</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Total Hours</th>'+
+          '<th style="border:1px solid #b0ccb8;padding:5px 6px;text-align:center;">Mileage</th>'+
+        '</tr>'+
+      '</thead>'+
+      '<tbody>'+rowsHTML+'</tbody>'+
+      '<tfoot>'+
+        '<tr style="background:#1a6b3c;color:#fff;font-weight:bold;">'+
+          '<td colspan="6" style="border:1px solid #0e5a30;padding:6px 10px;">Total Visits: '+tV+' &nbsp;&nbsp;&nbsp; Total Mileage: '+tM+' km</td>'+
+          '<td style="border:1px solid #0e5a30;padding:6px;text-align:center;">'+tW+'</td>'+
+          '<td style="border:1px solid #0e5a30;padding:6px;text-align:center;">'+tT+'</td>'+
+          '<td style="border:1px solid #0e5a30;padding:6px;text-align:center;">'+tR+'</td>'+
+          '<td style="border:1px solid #0e5a30;padding:6px;text-align:center;">'+tO+'</td>'+
+          '<td style="border:1px solid #0e5a30;padding:6px;text-align:center;">'+tH+'</td>'+
+          '<td style="border:1px solid #0e5a30;padding:6px;text-align:center;">'+tM+'</td>'+
+        '</tr>'+
+      '</tfoot>'+
+    '</table>'+
+
+    '<table style="width:100%;border-collapse:collapse;">'+
+      '<tbody>'+
+        '<tr>'+
+          '<td style="border:1px solid #b0ccb8;padding:14px 16px;width:50%;vertical-align:top;background:#fafffb;">'+
+            '<div style="font-size:13px;font-weight:bold;color:#1b5e20;border-bottom:2px solid #1b5e20;padding-bottom:8px;margin-bottom:12px;">GQS Approval</div>'+
+            '<div style="font-size:10px;font-weight:bold;color:#555;">Coordinator</div>'+
+            '<div style="font-size:12px;color:#222;margin-bottom:10px;">Praveenkumar Gunasekaran</div>'+
+            '<div style="font-size:10px;font-weight:bold;color:#555;">Date Generated</div>'+
+            '<div style="font-size:12px;color:#222;margin-bottom:10px;">'+genDate+'</div>'+
+            '<div style="font-size:11px;font-weight:bold;color:#1b5e20;">&#10003; Approved and generated by GQS</div>'+
+          '</td>'+
+          '<td style="border:1px solid #b0ccb8;padding:14px 16px;width:50%;vertical-align:top;background:#fafbff;">'+
+            '<div style="font-size:13px;font-weight:bold;color:#1a3a5c;border-bottom:2px solid #1a3a5c;padding-bottom:8px;margin-bottom:12px;">Client Approval</div>'+
+            '<div style="font-size:10px;font-weight:bold;color:#555;">Approved By</div>'+
+            '<div style="font-size:12px;color:#222;margin-bottom:8px;">Nor Azila Kamarudin</div>'+
+            '<div style="font-size:10px;font-weight:bold;color:#555;margin-bottom:3px;">Signature</div>'+
+            '<div style="border:1px solid #c5d3e0;border-radius:5px;background:#fff;min-height:56px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;">'+
+              '<svg width="130" height="40" viewBox="0 0 140 46"><path d="M8 34 C18 14, 28 14, 34 26 C40 38, 48 12, 58 22 C68 32, 74 10, 84 20 C92 28, 100 16, 112 26 C120 32, 126 22, 132 28" fill="none" stroke="#1a3a5c" stroke-width="2" stroke-linecap="round"/></svg>'+
+            '</div>'+
+            '<div style="font-size:10px;font-weight:bold;color:#555;">Date</div>'+
+            '<div style="font-size:12px;color:#222;margin-bottom:8px;">'+genDate+'</div>'+
+            '<div style="font-size:11px;font-weight:bold;color:#1a3a5c;">&#10003; Approved via client portal</div>'+
+          '</td>'+
+        '</tr>'+
+      '</tbody>'+
+    '</table>'+
+
+  '</body></html>';
+
+  return html;
+}
+
+function openSignedTimesheetModal(inspector,visitNum){
+  signedTsCurrentVisit=visitNum;
+  const idx=filteredData.findIndex(r=>r.visit===visitNum);
+  const batchIdx=idx>=0?Math.floor(idx/8):0;
+  const allBatches=chunkRows(filteredData,8);
+  const batchRows=allBatches[batchIdx]||[filteredData[0]];
+  const batchLabel=allBatches.length>1?(' (Batch '+(batchIdx+1)+' of '+allBatches.length+')'):'';
+  document.getElementById('signedTsDocLabel').textContent=DOC_NAME+'.pdf'+batchLabel;
+  const html=buildSignedTimesheetHtml(batchRows,DOC_NAME,batchLabel);
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  document.getElementById('signedTsFrame').src=url;
+  document.getElementById('signedTsModal').classList.add('open');
+}
+function closeSignedTsModal(){
+  document.getElementById('signedTsModal').classList.remove('open');
+}
+function approveSignedDoc(){
+  closeSignedTsModal();
+  showToast('Document approved for visit '+signedTsCurrentVisit+'!');
+}
+function resendLinkFlow(){
+  closeSignedTsModal();
+  currentRevision=currentRevision+1;
+  openTimesheetModal(true);
+  showToast('Restarting timesheet process \u2014 revision REV'+currentRevision+' will be generated.');
+}
+
 function renderVisitList(){
   const list=document.getElementById('visitList');
   const warn=document.getElementById('noSelectionWarn');
@@ -1002,6 +1197,111 @@ function doUpload(){
 }
 
 document.getElementById('uploadModal').addEventListener('click',function(e){if(e.target===this)closeUploadModal();});
+document.getElementById('signedTsModal').addEventListener('click',function(e){if(e.target===this)closeSignedTsModal();});
+
+function renderEmailPreview(){
+  const container=document.getElementById('emailPreviewContainer');
+  if(!container) return;
+
+  const fromEmail=(document.getElementById('ts_from_email')||{}).value||'coordinator@gqs.com';
+  const toEmail=(document.getElementById('ts_to_email')||{}).value||'client@example.com';
+  const ccEmail=(document.getElementById('ts_cc_email')||{}).value||'';
+  const clientContact=(document.getElementById('ts_cc')||{}).value||'Client Contact';
+  const coordName=(document.getElementById('ts_coord_name')||{}).value||'GQS Coordinator';
+  const tsFrom=(document.getElementById('ts_from')||{}).value||'';
+  const tsTo=(document.getElementById('ts_to')||{}).value||'';
+  const tsMonth=(document.getElementById('ts_month')||{}).value||'';
+  const tsWBS=(document.getElementById('ts_wbs')||{}).value||'';
+  const visitNum=(document.getElementById('ts_visitnum')||{}).value||'';
+
+  const allRows=selectedRows.size>0?[...selectedRows].sort((a,b)=>a-b).map(i=>filteredData[i]):[...filteredData];
+  const totalVisits=allRows.length;
+  const BATCH_SIZE=8;
+  const batches=chunkRows(allRows,BATCH_SIZE);
+  const multiDoc=batches.length>1;
+
+  const subject='Timesheet Approval Required'+(multiDoc?' ('+batches.length+' Documents)':'')+' \u2014 '+visitNum+' \u2014 '+tsMonth;
+
+  let docCardsHTML='';
+  batches.forEach((batchRows,idx)=>{
+    const suffix='TS'+String(idx+1).padStart(2,'0');
+    const docName=buildFilename(suffix);
+    docCardsHTML+=
+      '<div style="border:1px solid #e5eaf0;border-radius:6px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'+
+        '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:200px;">'+
+          '<div style="width:34px;height:40px;background:#e53935;border-radius:3px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;flex-shrink:0;">PDF</div>'+
+          '<div>'+
+            '<div style="font-size:12px;font-weight:700;color:#1a3a5c;">'+docName+'.pdf</div>'+
+            (multiDoc?'<div style="font-size:11px;color:#888;">Document '+(idx+1)+' of '+batches.length+'</div>':'')+
+          '</div>'+
+        '</div>'+
+        '<div style="text-align:center;min-width:50px;">'+
+          '<div style="font-size:15px;font-weight:700;color:#1b5e20;">'+batchRows.length+'</div>'+
+          '<div style="font-size:10px;color:#888;">Visits</div>'+
+        '</div>'+
+        '<div style="text-align:center;">'+
+          '<div style="background:#1b5e20;color:#fff;font-size:12px;font-weight:700;padding:8px 18px;border-radius:5px;white-space:nowrap;">Review and Approve</div>'+
+          '<div style="font-size:10px;color:#aaa;margin-top:4px;">Link expires in 30 days</div>'+
+        '</div>'+
+      '</div>';
+  });
+
+  const infoBoxHTML=multiDoc?
+    '<div style="background:#e8f2fc;border-radius:6px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#1a3a5c;display:flex;gap:10px;align-items:flex-start;">'+
+      '<span style="background:#1565c0;color:#fff;border-radius:50%;width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;">i</span>'+
+      '<span>This timesheet has been split into multiple documents as it exceeds the limit of <strong>'+BATCH_SIZE+' visits per document</strong>. Please review and approve each document separately.</span>'+
+    '</div>' : '';
+
+  const html=
+    '<div style="padding:10px 14px;border-bottom:1px solid #eee;font-size:11px;color:#555;background:#fafbfc;">'+
+      '<div style="margin-bottom:3px;"><strong>Subject:</strong> '+subject+'</div>'+
+      '<div style="margin-bottom:3px;"><strong>From:</strong> '+coordName+' &lt;'+fromEmail+'&gt;</div>'+
+      '<div style="margin-bottom:3px;"><strong>To:</strong> '+clientContact+' &lt;'+toEmail+'&gt;</div>'+
+      (ccEmail?'<div><strong>Cc:</strong> '+ccEmail+'</div>':'')+
+    '</div>'+
+    '<div style="background:#1a3a5c;padding:18px 20px;text-align:center;">'+
+      '<span style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px;">GQS <span style="color:#4caf50;">&#10003;</span></span>'+
+      '<div style="font-size:10px;color:#a8c0d8;letter-spacing:2px;margin-top:4px;">INTEGRITY &bull; QUALITY &bull; SAFETY</div>'+
+    '</div>'+
+    '<div style="height:4px;background:#4caf50;"></div>'+
+    '<div style="padding:22px 24px;background:#fff;">'+
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">'+
+        '<div style="width:44px;height:44px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">&#128203;</div>'+
+        '<div>'+
+          '<div style="font-size:18px;font-weight:700;color:#1a3a5c;">Timesheet Approval Required</div>'+
+          '<div style="font-size:12px;color:#1565c0;border-bottom:2px solid #4caf50;display:inline-block;padding-bottom:2px;">Visit: '+visitNum+' \u2014 '+tsMonth+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="font-size:13px;color:#1a3a5c;font-weight:700;margin-bottom:10px;">Dear '+clientContact+',</div>'+
+      '<div style="font-size:13px;color:#333;line-height:1.6;margin-bottom:14px;">'+
+        'Please review and approve the consolidated inspection timesheet(s) for the period <strong>'+tsFrom+' to '+tsTo+'</strong> under WBS <strong>'+tsWBS+'</strong>.<br/>'+
+        'A total of <strong>'+totalVisits+'</strong> visits have been recorded.'+
+      '</div>'+
+      infoBoxHTML+
+      '<div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:10px;display:flex;align-items:center;gap:6px;">&#128196; Documents for Your Review &amp; Approval</div>'+
+      docCardsHTML+
+      '<div style="background:#e8f5e9;border-radius:6px;padding:14px;margin:14px 0;font-size:12px;color:#1b5e20;display:flex;gap:10px;align-items:flex-start;">'+
+        '<span style="font-size:16px;">&#128274;</span>'+
+        '<div>'+
+          '<strong>No login is required</strong> to review and approve the timesheet(s).<br/>'+
+          'Click the "Review and Approve" button above to access each document. Each link is unique and will expire in 30 days for security.'+
+        '</div>'+
+      '</div>'+
+      '<div style="font-size:13px;color:#333;margin-top:16px;">'+
+        'Thank you for your time and prompt attention.<br/><br/>'+
+        'Kind regards,<br/>'+
+        '<strong style="color:#1a3a5c;">'+coordName+'</strong><br/>'+
+        'GQS Coordinator<br/>'+
+        '<span style="color:#1565c0;">'+fromEmail+'</span><br/>'+
+        'GQS'+
+      '</div>'+
+    '</div>'+
+    '<div style="background:#1a3a5c;padding:12px 20px;text-align:center;font-size:11px;color:#c8d8e8;">'+
+      '&#127760; www.gqs.com &nbsp;|&nbsp; &#128274; Integrity &bull; Quality &bull; Safety &nbsp;|&nbsp; &#9993; info@gqs.com'+
+    '</div>';
+
+  container.innerHTML=html;
+}
 
 function renderLinkList(){
   const container=document.getElementById('linkListContainer');
