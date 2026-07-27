@@ -1320,7 +1320,7 @@ function renderLinkList(){
   if(!container) return;
   const allRows=selectedRows.size>0?[...selectedRows].sort((a,b)=>a-b).map(i=>filteredData[i]):[...filteredData];
   if(!allRows.length){ container.innerHTML=''; return; }
-  const batches=chunkRows(allRows,15);
+  const batches=chunkRows(allRows,8);
   container.innerHTML='';
   batches.forEach((batchRows,idx)=>{
     const suffix='TS'+String(idx+1).padStart(2,'0');
